@@ -9,11 +9,8 @@ import json
 
 #vars
 port = 48000
-#UNITY_IP = "10.162.34.19"
-#UNITY_IP = "10.1.10.75"
-UNITY_IP = "192.168.1.106"
-
-
+UNITY_IP = "10.162.34.213"
+# UNITY_IP = "10.162.34.130"
 
 #ambf setup
 _client = Client()
@@ -24,15 +21,6 @@ psm1 = _client.get_obj_handle('/ambf/env/psm1/baselink')
 psm2 = _client.get_obj_handle('/ambf/env/psm2/baselink')
 print(psm1.get_num_joints())
 print(psm2.get_num_joints())
-
-camera = _client.get_obj_handle('/ambf/env/cameras/cameraL')
-shell = _client.get_obj_handle('/ambf/env/shell')
-light = _client.get_obj_handle('/ambf/env/lights/light2')
-
-time.sleep(3)
-print(camera.get_pos())
-print(camera.get_rpy())
-camera.set_rpy(3.14, -1.04, 1.57)
 
 #IP broadcast Setup
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -55,12 +43,9 @@ psm1_js_sock.settimeout(0.01)
 
 
 psm2_js_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-psm2_js_sock.bind(("0.0.0.0", port+32))
+psm2_js_sock.bind(("0.0.0.0", port+12))
 psm2_js_sock.settimeout(0.01)
 
-ecm_pos_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-ecm_pos_sock.bind(("0.0.0.0", port+18))
-ecm_pos_sock.settimeout(0.01)
 
 #send to Unity
 psm1_joint_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -85,7 +70,7 @@ def recieve(sock):
             break
     return latest if latest is not None else []
 def send(socket, joints, ip, port):
-    #print("sending: " + str(joints))
+    print("sending: " + str(joints))
     data = {"GetStateJoint": {'Position': joints}}
     jsend = json.dumps(data)
     socket.sendto(jsend.encode('utf-8'), (ip, port))
@@ -100,37 +85,28 @@ def send(socket, joints, ip, port):
 
 
 PSM1_JOINT_PORT = port + 4
-PSM2_JOINT_PORT = port + 22
+PSM2_JOINT_PORT = port + 2
 
 #helper function for updating AMBF PSM Joint States
 def update_js(obj, js_list):
     for i, js in enumerate(js_list):
-        if i != 2:
-            obj.set_joint_pos(i, math.radians(js))
-        else:
-            obj.set_joint_pos(i, js)
+        obj.set_joint_pos(i, math.radians(js))
 
-# #broadcast IP to Hololens for 30 seconds
-# for i in range(200):
-#     sock.sendto(msg.encode(), (UNITY_IP, 47999))
-#     print("sent ip")
-#     time.sleep(0.1)
+#broadcast IP to Hololens for 30 seconds
+for i in range(300):
+    sock.sendto(msg.encode(), (UNITY_IP, 49000))
+    print("sent ip")
+    time.sleep(0.1)
 
 print("entering main loop")
 prevjoints1 = [0, 0, 0, 0, 0, 0]
 prevjoints2 = [0, 0, 0, 0, 0, 0]
-camera_rpy = [3.14, -1.04, 1.57]
-
 while True:
-    #Broadcast IP to Hololens
-    sock.sendto(msg.encode(), (UNITY_IP, 47999))
-
-    shell_pos = shell.get_pos()
+    
 
     #SUJ State / PSM RCM Position - Unity always Priority
     try:
         trans1 = recieve(psm1_pos_sock)
-        
         
     except socket.timeout:
         print("socket timeout1")
@@ -143,10 +119,9 @@ while True:
         trans2 = []
 
     if len(trans1) != 0:
-        print(trans1)
+        pass
         #print("SUJ1 recieved from Unity" + str(trans1))
-        #psm1.set_pos(trans1[2]-.4, -trans1[0]+1.4, trans1[1]-1.7)
-        psm1.set_pos(trans1[2]+shell_pos.x, -trans1[0]+shell_pos.y, trans1[1]+shell_pos.z)
+        psm1.set_pos(trans1[2], trans1[0], trans1[1])
         psm1.set_rpy(0, 0, -math.radians(trans1[4]))
 
 
@@ -154,9 +129,7 @@ while True:
     if len(trans2) != 0:
         pass
         #print("SUJ4 recieved from Unity" + str(trans2))
-        #psm2.set_pos(trans2[2]-.4, -trans2[0]+1.4, trans2[1]-1.7) + shell.get_pos()
-        psm2.set_pos(trans2[2]+shell_pos.x, -trans2[0]+shell_pos.y, trans2[1]+shell_pos.z)
-
+        psm2.set_pos(trans2[2], trans2[0], trans2[1])
         psm2.set_rpy(0, 0, -math.radians(trans2[4]))
 
 
@@ -181,7 +154,7 @@ while True:
         joints2 = []
 
     if len(joints1) != 0:
-        #print("PSM1 Joints: " + str(joints1))
+        print("PSM1 Joints: " + str(joints1))
         update_js(psm1, joints1)
         prevjoints1 = joints1
 
@@ -192,7 +165,7 @@ while True:
         pass
 
     if len(joints2) != 0:
-        #print("PSM2 Joints: " + str(joints2))
+        print("PSM2 Joints: " + str(joints2))
         update_js(psm2, joints2)
         prevjoints2 = joints2
 
@@ -205,28 +178,6 @@ while True:
     send(psm1_joint_sock, psm1.get_all_joint_pos()[0:6], UNITY_IP, PSM1_JOINT_PORT)
     send(psm2_joint_sock, psm2.get_all_joint_pos()[0:6], UNITY_IP, PSM2_JOINT_PORT)
 
-    try:
-        camera_f = recieve(ecm_pos_sock)
-        
-    except socket.timeout:
-        print("socket timeout1")
-        camera_f = []
-
-    if len(camera_f) != 0:
-        print(camera_f[5])
-        
-        #print("SUJ1 recieved from Unity" + str(trans1))
-        camera.set_pos(-camera_f[2]+shell_pos.x-0.14, camera_f[0]+shell_pos.y-0.2, camera_f[1]+shell_pos.z-0.79)
-        #camera.set_pos(camera_f[2]+shell_pos.x, -camera_f[0]+shell_pos.y, camera_f[1]+shell_pos.z)
-
-        #psm1.set_pos(trans1[2]+shell_pos.x, -trans1[0]+shell_pos.y, trans1[1]+shell_pos.z)
-
-        camera.set_rpy(3.14, math.radians(camera_f[4])+1.57/2+camera_rpy[1], math.radians(camera_f[3])+camera_rpy[2])
-    camera_pos = camera.get_pos()
-    #print(psm1.get_pos())
-    #light.set_pos(camera_pos.x, camera_pos.y, camera_pos.z)
-    #print(light.get_pos())
-    #print(camera.get_rpy())
     #send(psm1_joint_sock, [math.degrees(i) for i in psm1.get_all_joint_pos()[0:6]], UNITY_IP, PSM1_JOINT_PORT)
     #send(psm2_joint_sock, [math.degrees(i) for i in psm2.get_all_joint_pos()[0:6]], UNITY_IP, PSM2_JOINT_PORT)
 
