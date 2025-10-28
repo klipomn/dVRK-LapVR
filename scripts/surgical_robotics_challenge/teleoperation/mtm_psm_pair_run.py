@@ -47,6 +47,8 @@
 import sys
 from surgical_robotics_challenge.simulation_manager import SimulationManager
 from surgical_robotics_challenge.psm_arm import PSM
+import socket
+import json
 import time
 import rospy
 from PyKDL import Frame, Rotation, Vector, Wrench
@@ -175,6 +177,25 @@ class ControllerInterface:
         self.update_arm_pose()
         # self.update_visual_markers()
 
+# Helper function for sending data to Unity
+def send(socket, joints, ip, port):
+    print("sending: " + str(joints))
+    data = {"GetStateJoint": {'Position': joints}}
+    jsend = json.dumps(data)
+    socket.sendto(jsend.encode('utf-8'), (ip, port))
+
+def get_all_joint_pos(arm,left):
+    vector = [0,0,0,0,0,0]
+    for i in range(6):
+        if i == 0 and left:
+            vector[i] = -1 * arm.base.get_joint_pos(i) - 0.78
+        elif i == 0:
+            vector[i] = -1 * arm.base.get_joint_pos(i) + 0.78
+        elif i == 1:
+            vector[i] = -1 * arm.base.get_joint_pos(i) + 0.2
+        else:
+            vector[i] = arm.base.get_joint_pos(i)
+    return vector
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -211,6 +232,16 @@ if __name__ == "__main__":
 
     controllers = []
     psm_arms = []
+
+    # define unity communication
+    port = 48000
+    UNITY_IP = "10.162.34.213"
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    msg = json.dumps([1.0, 2.0, 3.0])
+    psm1_joint_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    psm2_joint_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    PSM1_JOINT_PORT = port + 4
+    PSM2_JOINT_PORT = port + 2
 
     if parsed_args.run_psm_one is True:
         # Initial Target Offset for PSM1
@@ -267,7 +298,11 @@ if __name__ == "__main__":
             while not rospy.is_shutdown():
                 for cont in controllers:
                     cont.run()
+                send(psm1_joint_sock, get_all_joint_pos(psm1,1), UNITY_IP, PSM1_JOINT_PORT)
+                send(psm2_joint_sock, get_all_joint_pos(psm2,0), UNITY_IP, PSM2_JOINT_PORT)
                 rate.sleep()
         except Exception as e:
             print(e)
             print('Exception! Goodbye')
+
+

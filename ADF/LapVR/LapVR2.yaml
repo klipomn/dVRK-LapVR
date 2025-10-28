@@ -134,7 +134,7 @@ BODY insertion link:
     linear: 0.04
   visible: true
   collision groups:
-  - 0
+  - 8
   collision shape: CYLINDER
   collision geometry:
     axis: Z
@@ -187,7 +187,7 @@ BODY pitch end link:
     linear: 0.04
   visible: false
   collision groups:
-  - 1
+  - 9
   collision shape: CYLINDER
   collision geometry:
     axis: Z
