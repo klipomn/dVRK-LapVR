@@ -231,6 +231,6 @@ while not rospy.is_shutdown():
     board9.write_current(1, currentAdjust(-contact_force[1], 1))
     board9.write_current(2, currentAdjust(contact_force[2], 2))
 
-    time.sleep(0.001)
+    time.sleep(0.005)
 
 board9.cleanup()
